@@ -32,6 +32,10 @@ class SistemaEntregas:
             self.logo_img = ImageTk.PhotoImage(imagem_pil)
             self.logo_label = ttk.Label(self.logo_frame, image=self.logo_img)
             self.logo_label.pack(pady=5)
+
+            # Adicionar texto abaixo do logo
+            ttk.Label(self.logo_frame, text="Associação dos Revendedores de Defensivos Agrícolas do Vale Jaguari", font=("Arial", 12)).pack(pady=2)
+            ttk.Label(self.logo_frame, text="Fundada em 31/07/2003", font=("Arial", 12)).pack(pady=2)
         except Exception as e:
             print(f"Erro ao carregar o logo: {e}")
         
@@ -61,13 +65,20 @@ class SistemaEntregas:
                 'Fone': str,
                 'Data': str
             })
-            
+
+            # Converter os campos numéricos para o tipo apropriado
+            for col in ['Total Embalagens', 'Lavadas', 'Não Lavadas', 'Impróprias']:  # Adicione aqui os campos que você precisa
+                if col in self.df.columns:
+                    self.df[col] = pd.to_numeric(self.df[col], errors='coerce').fillna(0).astype(int)
+
             # Configurações para evitar notação científica
             pd.set_option('display.float_format', '{:,.2f}'.format)
             pd.options.display.float_format = '{:,.0f}'.format
             pd.set_option('display.max_colwidth', None)
         else:
             self.criar_dataframe_inicial()
+
+        self.entradas['cpf_cnpj'].bind("<FocusOut>", self.preencher_informacoes)
 
     def criar_aba_cadastro(self):
         # Frame principal da aba com configuração de peso
@@ -94,16 +105,21 @@ class SistemaEntregas:
 
         self.entradas = {}
         for i, (label, campo) in enumerate(campos):
-            ttk.Label(frame_dados, text=label).grid(row=i, column=0, padx=5, pady=2, sticky='e')
+            ttk.Label(frame_dados, text=label, font=("Arial", 10)).grid(row=i, column=0, padx=5, pady=2, sticky='e')
             entrada = ttk.Entry(frame_dados)
             entrada.grid(row=i, column=1, padx=5, pady=2, sticky='ew')
             self.entradas[campo] = entrada
 
         # Data
-        ttk.Label(frame_dados, text="Data:").grid(row=len(campos), column=0, padx=5, pady=2, sticky='e')
+        ttk.Label(frame_dados, text="Data:", font=("Arial", 10)).grid(row=len(campos), column=0, padx=5, pady=2, sticky='e')
         self.entradas['data'] = DateEntry(frame_dados, width=12, background='darkblue',
                                         foreground='white', borderwidth=2, date_pattern='dd/mm/yyyy')
         self.entradas['data'].grid(row=len(campos), column=1, padx=5, pady=2, sticky='w')
+
+        # Adicionar campo de observações
+        ttk.Label(frame_dados, text="Observações:", font=("Arial", 10)).grid(row=len(campos)+1, column=0, padx=5, pady=2, sticky='e')
+        self.entradas['observacoes'] = ttk.Entry(frame_dados)
+        self.entradas['observacoes'].grid(row=len(campos)+1, column=1, padx=5, pady=2, sticky='ew')
 
         # Frame para embalagens
         frame_embalagens = ttk.LabelFrame(self.aba_cadastro, text="Embalagens")
@@ -119,7 +135,7 @@ class SistemaEntregas:
     def criar_campos_embalagens(self, frame):
         frame.grid_columnconfigure((0,1,2), weight=1)  # Distribuir peso igualmente
         
-        tipos_embalagens = ['Lavadas', 'Não Lavadas', 'Impróprias']
+        tipos_embalagens = ['Lavadas', 'Não Lavadas', 'Impróprias', 'Outras']
         self.entradas_embalagens = {}
 
         for i, tipo in enumerate(tipos_embalagens):
@@ -141,25 +157,39 @@ class SistemaEntregas:
             campos_frame.pack(fill='both', expand=True)
             campos_frame.grid_columnconfigure(0, weight=1)
 
-            for j, tamanho in enumerate(['1L', '5L', '10L', '20L', 'ML', 'GR', 'KG']):
-                frame_qtd = ttk.Frame(campos_frame)
-                frame_qtd.pack(fill='x', padx=2, pady=2)
-                frame_qtd.grid_columnconfigure(1, weight=1)
-                
-                ttk.Label(frame_qtd, text=f"{tamanho}:", width=8).pack(side='left')
-                entrada = ttk.Entry(frame_qtd, width=8)
-                entrada.pack(side='left', padx=2)
-                entrada.insert(0, "0")
-                
-                chave = f'Embalagens {tipo} {tamanho}'
-                self.entradas_embalagens[chave] = entrada
+            # Adicionando campos para Outras Embalagens
+            if tipo == 'Outras':
+                for embalagem in ['Plásticas Flexíveis', 'Papelão', 'Tampas']:
+                    frame_outros = ttk.Frame(campos_frame)
+                    frame_outros.pack(fill='x', padx=2, pady=2)
+                    
+                    # Checkbox para Unidades
+                    var_unidade = tk.BooleanVar()
+                    ttk.Checkbutton(frame_outros, text=f"{embalagem} - Unidades", variable=var_unidade).pack(side='left', padx=5)
+                    entrada_unidades = ttk.Entry(frame_outros, width=8)
+                    entrada_unidades.pack(side='left', padx=2)
+                    entrada_unidades.insert(0, "0")
+                    self.entradas_embalagens[f'Outras {embalagem} Unidades'] = entrada_unidades
 
-                if tamanho in ['ML', 'GR', 'KG']:
-                    ttk.Label(frame_qtd, text="Peso/Vol:", width=8).pack(side='left', padx=2)
-                    entrada_peso = ttk.Entry(frame_qtd, width=8)
-                    entrada_peso.pack(side='left')
-                    entrada_peso.insert(0, "0")
-                    self.entradas_embalagens[f'Peso {tipo} {tamanho}'] = entrada_peso
+                    # Checkbox para KG
+                    var_kg = tk.BooleanVar()
+                    ttk.Checkbutton(frame_outros, text=f"{embalagem} - KG", variable=var_kg).pack(side='left', padx=5)
+                    entrada_kg = ttk.Entry(frame_outros, width=8)
+                    entrada_kg.pack(side='left', padx=2)
+                    entrada_kg.insert(0, "0")
+                    self.entradas_embalagens[f'Outras {embalagem} KG'] = entrada_kg
+
+            else:  # Para Lavadas, Não Lavadas e Impróprias
+                # Aqui você pode manter o código existente para Lavadas, Não Lavadas e Impróprias
+                # Exemplo de como estava antes (simplificado)
+                for tamanho in ['1L', '5L', '10L', '20L', 'ML', 'GR', 'KG']:
+                    frame_qtd = ttk.Frame(campos_frame)
+                    frame_qtd.pack(fill='x', padx=2, pady=2)
+                    ttk.Label(frame_qtd, text=f"{tamanho}:", width=8).pack(side='left')
+                    entrada = ttk.Entry(frame_qtd, width=8)
+                    entrada.pack(side='left', padx=2)
+                    entrada.insert(0, "0")
+                    self.entradas_embalagens[f'Embalagens {tipo} {tamanho}'] = entrada
 
     def criar_aba_pesquisa(self):
         # Frame para critérios de pesquisa
@@ -267,6 +297,8 @@ class SistemaEntregas:
                     except:
                         messagebox.showerror("Erro", "Formato de data inválido. Use dd/mm/yyyy")
                         return
+            else:
+                resultados = pd.DataFrame()  # Não queremos resultados se não for um dos critérios válidos
 
             if not resultados.empty:
                 # Variáveis para totais gerais
@@ -282,6 +314,9 @@ class SistemaEntregas:
                     'Impróprias': {'1L': 0, '5L': 0, '10L': 0, '20L': 0, 'ML': 0, 'GR': 0, 'KG': 0}
                 }
 
+                # Dicionário para armazenar totais de Outras Embalagens
+                totais_outros = {'Plásticas Flexíveis': 0, 'Papelão': 0, 'Tampas': 0}
+
                 for _, row in resultados.iterrows():
                     # Calcular totais por categoria para esta entrega
                     total_lavadas = 0
@@ -292,7 +327,7 @@ class SistemaEntregas:
                     for tipo in ['Lavadas', 'Não Lavadas', 'Impróprias']:
                         for tamanho in ['1L', '5L', '10L', '20L', 'ML', 'GR', 'KG']:
                             coluna = f'Embalagens {tipo} {tamanho}'
-                            valor = int(row.get(coluna, 0))
+                            valor = int(row.get(coluna, 0) or 0)
                             totais_detalhados[tipo][tamanho] += valor
                             
                             if tipo == 'Lavadas':
@@ -316,6 +351,12 @@ class SistemaEntregas:
                         f"{total_esta_entrega} ({total_lavadas}L/{total_nao_lavadas}NL/{total_improprias}I)"
                     ))
 
+                    # Contar as Outras Embalagens
+                    for embalagem in ['Plásticas Flexíveis', 'Papelão', 'Tampas']:
+                        unidades = int(row.get(f'Outras {embalagem} Unidades', 0))
+                        kg = int(row.get(f'Outras {embalagem} KG', 0))
+                        totais_outros[embalagem] += unidades + kg
+
                 total_geral_embalagens = total_geral_lavadas + total_geral_nao_lavadas + total_geral_improprias
 
                 # Criar mensagem detalhada
@@ -327,18 +368,12 @@ class SistemaEntregas:
                 mensagem += f"- Não Lavadas: {total_geral_nao_lavadas}\n"
                 mensagem += f"- Impróprias: {total_geral_improprias}\n\n"
                 
-                mensagem += "Detalhamento por tipo e tamanho:\n"
-                for tipo in ['Lavadas', 'Não Lavadas', 'Impróprias']:
-                    mensagem += f"\n{tipo}:\n"
-                    for tamanho in ['1L', '5L', '10L', '20L', 'ML', 'GR', 'KG']:
-                        qtd = totais_detalhados[tipo][tamanho]
-                        if qtd > 0:  # Só mostra se tiver quantidade
-                            mensagem += f"  {tamanho}: {qtd}\n"
-                            if tamanho in ['ML', 'GR', 'KG']:
-                                coluna_peso = f'Peso {tipo} {tamanho}'
-                                peso_total = sum(float(row.get(coluna_peso, 0)) for _, row in resultados.iterrows())
-                                if peso_total > 0:
-                                    mensagem += f"    Peso/Volume Total: {peso_total:.2f} {tamanho}\n"
+                # Adicionando totais de Outras Embalagens ao resumo
+                mensagem += "Total de Outras Embalagens:\n"
+                total_outros_embalagens = sum(totais_outros.values())  # Soma total de outras embalagens
+                mensagem += f"- Total: {total_outros_embalagens}\n"
+                for embalagem, total in totais_outros.items():
+                    mensagem += f"  - {embalagem}: {total}\n"
 
                 messagebox.showinfo("Resumo Detalhado", mensagem)
             else:
@@ -374,7 +409,8 @@ class SistemaEntregas:
                     'municipio': 'Município',
                     'revendas': 'Revenda(s)',
                     'uf': 'UF',
-                    'fone': 'Fone'
+                    'fone': 'Fone',
+                    'observacoes': 'Observações'  # Mapeamento para observações
                 }
                 nome_campo = mapeamento.get(campo, campo)
                 dados[nome_campo] = valor
@@ -404,6 +440,29 @@ class SistemaEntregas:
             else:
                 entrada.delete(0, tk.END)
                 entrada.insert(0, "0")
+
+    def preencher_informacoes(self, event):
+        cpf = self.entradas['cpf_cnpj'].get().strip()
+        # Aqui você deve implementar a lógica para buscar as informações com base no CPF
+        # Exemplo fictício de busca em um DataFrame
+        informacoes = self.df[self.df['CPF/CNPJ'] == cpf]
+        
+        if not informacoes.empty:
+            # Preencher as outras textboxes com as informações encontradas
+            self.entradas['produtor'].delete(0, tk.END)
+            self.entradas['produtor'].insert(0, informacoes.iloc[0]['Produtor/Empresa'])
+            self.entradas['ie_produtor'].delete(0, tk.END)
+            self.entradas['ie_produtor'].insert(0, informacoes.iloc[0]['I.E/Produtor'])
+            self.entradas['endereco'].delete(0, tk.END)
+            self.entradas['endereco'].insert(0, informacoes.iloc[0]['Endereço'])
+            self.entradas['municipio'].delete(0, tk.END)
+            self.entradas['municipio'].insert(0, informacoes.iloc[0]['Município'])
+            self.entradas['revendas'].delete(0, tk.END)
+            self.entradas['revendas'].insert(0, informacoes.iloc[0]['Revenda(s)'])
+            self.entradas['uf'].delete(0, tk.END)
+            self.entradas['uf'].insert(0, informacoes.iloc[0]['UF'])
+            self.entradas['fone'].delete(0, tk.END)
+            self.entradas['fone'].insert(0, informacoes.iloc[0]['Fone'])
 
 if __name__ == "__main__":
     root = tk.Tk()
